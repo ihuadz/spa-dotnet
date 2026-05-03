@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./src/index.js",
   "bin": {
-    "spa-dotnet": "./bin/spa-dotnet.js"
+    "spa-dotnet": "bin/spa-dotnet.js"
   },
   "files": [
     "bin/",
