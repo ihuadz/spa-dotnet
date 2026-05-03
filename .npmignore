@@ -1,0 +1,7 @@
+test/
+TestApp*/
+.git/
+.github/
+.DS_Store
+Thumbs.db
+*.tgz

@@ -1,0 +1,10 @@
+node_modules/
+package-lock.json
+*.tgz
+dist/
+.DS_Store
+Thumbs.db
+
+# Generated test projects
+TestApp*/
+test-output/

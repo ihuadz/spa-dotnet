@@ -1,0 +1,48 @@
+{
+  "name": "spa-dotnet",
+  "version": "1.0.0",
+  "description": "Scaffold a React + ASP.NET Core SPA project with Vite dev proxy and dotnet publish integration",
+  "type": "module",
+  "main": "./src/index.js",
+  "bin": {
+    "spa-dotnet": "./bin/spa-dotnet.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node test/test-solution-format.js && node test/test-client-project.js && node test/test-client-package.js && node test/test-modes.js && node test/test-configurer.js"
+  },
+  "keywords": [
+    "react",
+    "dotnet",
+    "aspnet",
+    "aspnetcore",
+    "vite",
+    "scaffold",
+    "spa",
+    "cli",
+    "template",
+    "typescript",
+    "swagger"
+  ],
+  "author": "Dezhi Hua (https://github.com/ihuadz)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ihuadz/spa-dotnet.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ihuadz/spa-dotnet/issues"
+  },
+  "homepage": "https://github.com/ihuadz/spa-dotnet#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.3.0"
+  }
+}
