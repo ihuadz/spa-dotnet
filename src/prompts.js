@@ -9,7 +9,6 @@ const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-
 const FRAMEWORKS = ["net10.0", "net9.0", "net8.0"];
 const LANGUAGES = ["TypeScript", "JavaScript"];
 
-
 function isLinux() {
   return process.platform === "linux";
 }

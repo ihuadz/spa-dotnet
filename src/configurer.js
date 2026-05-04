@@ -93,41 +93,65 @@ async function configureProgramCs(serverDir, https) {
     content = content.replace(/app\.UseHttpsRedirection\(\);\n?/, "");
   }
 
+  // Prefix API routes with /api
   content = content.replace('app.MapGet("/weatherforecast"', 'app.MapGet("/api/weatherforecast"');
 
-  // Add SwaggerGen service (required for UseSwagger middleware)
-  if (!content.includes("AddSwaggerGen();")) {
-    if (content.includes("AddOpenApi();")) {
-      content = content.replace("AddOpenApi();", "AddOpenApi();\nbuilder.Services.AddSwaggerGen();");
-    } else if (content.includes("var app = builder.Build();")) {
+  // ── Swagger / OpenAPI ─────────────────────────────────────────────────────
+  // .NET 10 uses MapOpenApi() — replace with Swagger (either standalone or inside dev check)
+  const swaggerLines = `    app.UseSwagger();
+    app.UseSwaggerUI();`;
+
+  if (/app\.MapOpenApi\(\);/.test(content)) {
+    // Replace the entire dev-check block if MapOpenApi is inside one
+    if (/if\s*\(app\.Environment\.IsDevelopment\(\)\)\s*\{[^}]*app\.MapOpenApi\(\);/s.test(content)) {
       content = content.replace(
-        "var app = builder.Build();",
-        "builder.Services.AddSwaggerGen();\n\nvar app = builder.Build();",
+        /if\s*\(app\.Environment\.IsDevelopment\(\)\)\s*\{[^}]*app\.MapOpenApi\(\);\s*\n?\s*\}/,
+        `if (app.Environment.IsDevelopment())\n{\n${swaggerLines}\n}`,
       );
-    }
-  }
-
-  // Add Swagger UI middleware (needed for .NET 10 which only has MapOpenApi)
-  if (!/app\.UseSwagger\(\)/.test(content)) {
-    const swaggerBlock = `app.UseSwagger();
-app.UseSwaggerUI();
-`;
-    if (content.includes("app.MapOpenApi();")) {
-      content = content.replace("app.MapOpenApi();", `app.MapOpenApi();\n\n${swaggerBlock}`);
     } else {
-      content = content.replace("var app = builder.Build();\n", `var app = builder.Build();\n\n${swaggerBlock}`);
+      // MapOpenApi is standalone — replace it
+      content = content.replace("app.MapOpenApi();", `if (app.Environment.IsDevelopment())\n{\n${swaggerLines}\n}`);
+    }
+    // Append SwaggerGen after AddOpenApi (AddOpenApi provides base services SwaggerGen depends on)
+    if (content.includes("AddOpenApi();") && !content.includes("AddSwaggerGen();")) {
+      content = content.replace("AddOpenApi();", "AddOpenApi();\nbuilder.Services.AddSwaggerGen();");
+    }
+  } else if (!/app\.UseSwagger\(\)/.test(content)) {
+    // .NET 9 or older — no MapOpenApi, add Swagger if not present
+    if (!content.includes("AddSwaggerGen();")) {
+      if (content.includes("var app = builder.Build();")) {
+        content = content.replace(
+          "var app = builder.Build();",
+          "builder.Services.AddSwaggerGen();\n\nvar app = builder.Build();",
+        );
+      }
+    }
+    // Add swagger middleware inside existing dev check, or create a new one
+    if (/if\s*\(app\.Environment\.IsDevelopment\(\)\)\s*\{/.test(content)) {
+      content = content.replace(
+        /if\s*\(app\.Environment\.IsDevelopment\(\)\)\s*\{/,
+        `if (app.Environment.IsDevelopment())\n{\n${swaggerLines}`,
+      );
+    } else {
+      const swaggerBlock = `if (app.Environment.IsDevelopment())
+{
+${swaggerLines}
+}
+`;
+      if (content.includes("app.UseHttpsRedirection();")) {
+        content = content.replace("app.UseHttpsRedirection();\n", `app.UseHttpsRedirection();\n\n${swaggerBlock}`);
+      } else if (content.includes("var app = builder.Build();")) {
+        content = content.replace("var app = builder.Build();\n", `var app = builder.Build();\n\n${swaggerBlock}`);
+      }
     }
   }
 
+  // ── Static files & SPA fallback ───────────────────────────────────────────
   if (!content.includes("app.UseStaticFiles();")) {
-    const staticFilesBlock = `app.UseDefaultFiles();
-app.UseStaticFiles();
-
-`;
-
+    const staticFilesBlock = "app.UseDefaultFiles();\napp.UseStaticFiles();\n";
     if (content.includes("app.UseHttpsRedirection();")) {
       content = content.replace("app.UseHttpsRedirection();\n", `app.UseHttpsRedirection();\n\n${staticFilesBlock}`);
-    } else {
+    } else if (content.includes("var app = builder.Build();")) {
       content = content.replace("var app = builder.Build();\n", `var app = builder.Build();\n\n${staticFilesBlock}`);
     }
   }

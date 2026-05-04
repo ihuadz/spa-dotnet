@@ -86,6 +86,7 @@ async function testHttpMode() {
     ['program serves static files', programCs.includes('app.UseStaticFiles();')],
     ['program has Swagger middleware', programCs.includes('app.UseSwagger();')],
     ['program has SwaggerUI middleware', programCs.includes('app.UseSwaggerUI();')],
+    ['swagger is dev-only', programCs.includes('app.Environment.IsDevelopment()')],
     ['program has AddSwaggerGen service', programCs.includes('AddSwaggerGen()')],
     ['program maps SPA fallback', programCs.includes('app.MapFallbackToFile("index.html");')],
     ['vite has no HTTPS config', !viteConfig.includes('https: {')],
@@ -173,6 +174,7 @@ async function testCrlfLineEndings() {
     ['inserts UseDefaultFiles with CRLF template', result.includes('app.UseDefaultFiles();')],
     ['inserts Swagger middleware with CRLF template', result.includes('app.UseSwagger();')],
     ['inserts SwaggerUI middleware with CRLF template', result.includes('app.UseSwaggerUI();')],
+    ['swagger is dev-only with CRLF template', result.includes('app.Environment.IsDevelopment()')],
     ['inserts MapFallbackToFile with CRLF template', result.includes('app.MapFallbackToFile("index.html");')],
     ['updates API route with CRLF template', result.includes('app.MapGet("/api/weatherforecast"')],
   ];
@@ -185,6 +187,117 @@ async function testCrlfLineEndings() {
   console.log(`${passed}/${checks.length} checks passed\n`);
 
   await rm(crlfDir, { recursive: true, force: true });
+  return passed === checks.length;
+}
+
+async function testDotnet10SwaggerReplace() {
+  console.log('=== Test: .NET 10 MapOpenApi replaced by Swagger ===');
+  const dir = join(tmpdir(), 'test-spa-dotnet-swagger-replace');
+  await rm(dir, { recursive: true, force: true });
+  await mkdir(join(dir, `${NAME}.Server`, 'Properties'), { recursive: true });
+  await mkdir(join(dir, `${NAME}.Client`), { recursive: true });
+
+  // Simulate .NET 10 template with AddOpenApi + MapOpenApi
+  const programCs = `var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddOpenApi();
+
+var app = builder.Build();
+
+app.MapOpenApi();
+
+app.MapGet("/weatherforecast", () => Array.Empty<object>());
+
+app.Run();
+`;
+
+  await writeFile(join(dir, `${NAME}.Server`, `${NAME}.Server.csproj`), '<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>');
+  await writeFile(join(dir, `${NAME}.Server`, 'Program.cs'), programCs);
+  await writeFile(join(dir, `${NAME}.Server`, 'Properties', 'launchSettings.json'), '{}');
+  await writeFile(join(dir, `${NAME}.Client`, 'vite.config.ts'), 'export default {}');
+
+  await configureProject(dir, NAME, true, 'net10.0', 'TypeScript', TEST_PORTS);
+
+  const result = await readFile(join(dir, `${NAME}.Server`, 'Program.cs'));
+
+  const checks = [
+    ['MapOpenApi is removed', !result.includes('app.MapOpenApi()')],
+    ['AddOpenApi is kept', result.includes('AddOpenApi()')],
+    ['AddSwaggerGen is appended', result.includes('AddSwaggerGen()')],
+    ['UseSwagger is added', result.includes('app.UseSwagger();')],
+    ['UseSwaggerUI is added', result.includes('app.UseSwaggerUI();')],
+    ['swagger is dev-only', result.includes('app.Environment.IsDevelopment()')],
+    ['no double dev check', result.split('IsDevelopment()').length === 2], // one in if + one in condition
+  ];
+
+  let passed = 0;
+  for (const [name, ok] of checks) {
+    console.log(`${ok ? '✔' : '✖'} ${name}`);
+    if (ok) passed++;
+  }
+  console.log(`${passed}/${checks.length} checks passed\n`);
+
+  await rm(dir, { recursive: true, force: true });
+  return passed === checks.length;
+}
+
+async function testDotnet10RealTemplate() {
+  console.log('=== Test: .NET 10 real template (MapOpenApi inside dev check) ===');
+  const dir = join(tmpdir(), 'test-spa-dotnet-real-template');
+  await rm(dir, { recursive: true, force: true });
+  await mkdir(join(dir, `${NAME}.Server`, 'Properties'), { recursive: true });
+  await mkdir(join(dir, `${NAME}.Client`), { recursive: true });
+
+  // Real .NET 10 template: MapOpenApi is already inside if (app.Environment.IsDevelopment())
+  const programCs = `var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddOpenApi();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+}
+
+app.MapGet("/weatherforecast", () => Array.Empty<object>());
+
+app.Run();
+`;
+
+  await writeFile(join(dir, `${NAME}.Server`, `${NAME}.Server.csproj`), '<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>');
+  await writeFile(join(dir, `${NAME}.Server`, 'Program.cs'), programCs);
+  await writeFile(join(dir, `${NAME}.Server`, 'Properties', 'launchSettings.json'), '{}');
+  await writeFile(join(dir, `${NAME}.Client`, 'vite.config.ts'), 'export default {}');
+
+  await configureProject(dir, NAME, true, 'net10.0', 'TypeScript', TEST_PORTS);
+
+  const result = await readFile(join(dir, `${NAME}.Server`, 'Program.cs'));
+
+  const checks = [
+    ['MapOpenApi is removed', !result.includes('app.MapOpenApi()')],
+    ['AddOpenApi is kept', result.includes('AddOpenApi()')],
+    ['AddSwaggerGen is appended', result.includes('AddSwaggerGen()')],
+    ['UseSwagger is added', result.includes('app.UseSwagger();')],
+    ['UseSwaggerUI is added', result.includes('app.UseSwaggerUI();')],
+    ['swagger is dev-only', result.includes('app.Environment.IsDevelopment()')],
+    ['no double if nesting', result.split('IsDevelopment()').length === 2],
+    ['no extra closing brace', !result.includes('}\n\n}')],
+    ['has static files', result.includes('app.UseStaticFiles();')],
+    ['has fallback route', result.includes('app.MapFallbackToFile("index.html")')],
+  ];
+
+  let passed = 0;
+  for (const [name, ok] of checks) {
+    console.log(`${ok ? '✔' : '✖'} ${name}`);
+    if (ok) passed++;
+  }
+  console.log(`${passed}/${checks.length} checks passed\n`);
+
+  await rm(dir, { recursive: true, force: true });
   return passed === checks.length;
 }
 
@@ -253,11 +366,13 @@ async function run() {
   const r1 = await testHttpMode();
   const r2 = await testHttpsMode();
   const r3 = await testCrlfLineEndings();
-  const r4 = await testViteConfigConflict();
+  const r4 = await testDotnet10SwaggerReplace();
+  const r5 = await testDotnet10RealTemplate();
+  const r6 = await testViteConfigConflict();
 
   await rm(TEST_DIR, { recursive: true, force: true });
 
-  if (r1 && r2 && r3 && r4) {
+  if (r1 && r2 && r3 && r4 && r5 && r6) {
     console.log('All tests passed!');
   } else {
     console.log('Some tests failed!');
