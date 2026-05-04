@@ -1,6 +1,6 @@
 {
   "name": "spa-dotnet",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Scaffold a React + ASP.NET Core SPA project with Vite dev proxy and dotnet publish integration",
   "type": "module",
   "main": "./src/index.js",
